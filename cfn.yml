@@ -29,6 +29,10 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: 'sts:AssumeRole'
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
       Path: /
       Policies:
         - PolicyName: VoteAppInstancePolicy
@@ -50,6 +54,10 @@ Resources:
               - Effect: Allow
                 Action: 
                   - 'es:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:*'
                 Resource: '*'
   ImageToES:
     Type: 'AWS::Lambda::Function'
@@ -139,3 +147,98 @@ Resources:
         LambdaConfigurations:
           - Event: s3:ObjectCreated:Put
             Function: !GetAtt [ImageToES, Arn]
+  SearchImage:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt [IAMRole, Arn]
+      MemorySize: '128'
+      Code:
+        ZipFile: !Sub |
+          var AWS = require('aws-sdk');
+          AWS.config.update({region:'eu-west-1'});
+          var endpoint = new AWS.Endpoint('${ElasticsearchDomain.DomainEndpoint}');
+          var creds = new AWS.EnvironmentCredentials('AWS');
+
+          function searchImage(query, context) {
+            var req = new AWS.HttpRequest(endpoint);
+
+            req.method = 'GET';
+            req.path = '/image/labels/_search?q=labels:' + query;
+            req.region = '${AWS::Region}';
+            req.headers['presigned-expires'] = false;
+            req.headers['Host'] = endpoint.host;
+
+            var signer = new AWS.Signers.V4(req , 'es');
+            signer.addAuthorization(creds, new Date());
+
+            var send = new AWS.NodeHttpClient();
+            send.handleRequest(req, null, function(httpResp) {
+              var respBody = '';
+              httpResp.on('data', function (chunk) {
+                respBody += chunk;
+              });
+              httpResp.on('end', function (chunk) {
+                console.log('Response: ' + respBody);
+                context.succeed({
+                  "isBase64Encoded": false,
+                  "statusCode": 200,
+                  "headers": { "Access-Control-Allow-Origin": "*" },
+                  "body": "hello world"
+                });
+              });
+            }, function(err) {
+              console.log('Error: ' + err);
+              context.fail('Lambda failed with error ' + err);
+            });
+          }
+
+          exports.handler = function (event, context) {
+            console.log(event);
+            console.log(context);
+            console.log(event.queryStringParameters.q);
+            searchImage(event.queryStringParameters.q, context);
+          }
+      Runtime: nodejs4.3
+      Timeout: '20'
+  RestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Description: 'Vote API'
+      Name: 'Vote API'
+  ImageSearchResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId:
+        Ref: "RestApi"
+      ParentId:
+        Fn::GetAtt:
+          - "RestApi"
+          - "RootResourceId"
+      PathPart: "images"
+  GetImageMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ImageSearchResource
+      HttpMethod: 'GET'
+      AuthorizationType: 'NONE'
+      Integration:
+        Type: 'AWS_PROXY'
+        IntegrationHttpMethod: 'POST'
+        Uri: !Join [ "", ['arn:aws:apigateway:eu-west-1:lambda:path/2015-03-31/functions/', !GetAtt [SearchImage, Arn], '/invocations']]
+        Credentials: !GetAtt [IAMRole, Arn]
+  RestApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: ["GetImageMethod"]
+    Properties:
+      RestApiId: !Ref RestApi
+  RestApiStage:
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      DeploymentId: !Ref RestApiDeployment
+      Description: 'cfn deployed Stage vote'
+      RestApiId: !Ref RestApi
+      StageName: 'api'
+      Variables:
+        Stack: 'api'
