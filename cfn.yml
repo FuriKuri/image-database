@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'The AWS stack the image database'
+Resources:
+  ImageLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:*
+      FunctionName: !GetAtt [ImageToES, Arn]
+      Principal: s3.amazonaws.com
+  ElasticsearchDomain:
+    Type: "AWS::Elasticsearch::Domain"
+    Properties:
+      ElasticsearchClusterConfig:
+        InstanceCount: '1'
+        InstanceType: 't2.micro.elasticsearch'
+      EBSOptions:
+        EBSEnabled: true
+        VolumeSize: 10
+        VolumeType: 'gp2'
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '0'
+  IAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: VoteAppInstancePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:*'
+                Resource: 'arn:aws:logs:*:*:*'
+              - Action:
+                  - 's3:*'
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - 'rekognition:*'
+                Effect: Allow
+                Resource: '*'
+              - Effect: Allow
+                Action: 
+                  - 'es:*'
+                Resource: '*'
+  ImageToES:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt [IAMRole, Arn]
+      MemorySize: '128'
+      Code:
+        ZipFile: !Sub |
+          var AWS = require('aws-sdk');
+          AWS.config.update({region:'eu-west-1'});
+          var rekognition = new AWS.Rekognition();
+          var endpoint = new AWS.Endpoint('${ElasticsearchDomain.DomainEndpoint}');
+          var creds = new AWS.EnvironmentCredentials('AWS');
+
+          function postToES(doc, context) {
+            var req = new AWS.HttpRequest(endpoint);
+
+            req.method = 'POST';
+            req.path = '/image/labels';
+            req.region = '${AWS::Region}';
+            req.headers['presigned-expires'] = false;
+            req.headers['Host'] = endpoint.host;
+            req.body = doc;
+
+            var signer = new AWS.Signers.V4(req , 'es');
+            signer.addAuthorization(creds, new Date());
+
+            var send = new AWS.NodeHttpClient();
+            send.handleRequest(req, null, function(httpResp) {
+              var respBody = '';
+              httpResp.on('data', function (chunk) {
+                respBody += chunk;
+              });
+              httpResp.on('end', function (chunk) {
+                console.log('Response: ' + respBody);
+                context.succeed('Lambda added document ' + doc);
+              });
+            }, function(err) {
+              console.log('Error: ' + err);
+              context.fail('Lambda failed with error ' + err);
+            });
+          }
+
+          function processImage(image, context) {
+            var params = {
+              Image: image,
+              MaxLabels: 10,
+              MinConfidence: 40.0
+            };
+            rekognition.detectLabels(params, function(err, data) {
+              if (err) {
+                console.log(err, err.stack);
+                context.fail("Error: ", err);
+              } else {
+                console.log(data);
+                data.Image = image.S3Object.Name;
+                postToES(JSON.stringify(data), context);
+              }
+            });
+          }
+
+          exports.handler = function (event, context) {
+            event.Records.forEach(function(record) {
+              var srcBucket = record.s3.bucket.name;
+              console.log(srcBucket);
+              var srcImage = record.s3.object.key;
+              console.log(srcImage);
+              processImage({
+                S3Object: {
+                  Bucket: srcBucket,
+                  Name: srcImage
+                }
+              }, context);
+            });
+          }
+      Runtime: nodejs4.3
+      Timeout: '20'
+  ImageBucket:
+    Type: 'AWS::S3::Bucket'
+    DependsOn: ImageToES
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:Put
+            Function: !GetAtt [ImageToES, Arn]
