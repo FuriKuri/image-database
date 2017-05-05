@@ -180,11 +180,12 @@ Resources:
               });
               httpResp.on('end', function (chunk) {
                 console.log('Response: ' + respBody);
+                var response = JSON.parse(respBody);
                 context.succeed({
                   "isBase64Encoded": false,
                   "statusCode": 200,
                   "headers": { "Access-Control-Allow-Origin": "*" },
-                  "body": "hello world"
+                  "body": JSON.stringify(response.hits.hits)
                 });
               });
             }, function(err) {
