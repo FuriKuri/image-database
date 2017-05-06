@@ -164,7 +164,7 @@ Resources:
             var req = new AWS.HttpRequest(endpoint);
 
             req.method = 'GET';
-            req.path = '/image/labels/_search?q=labels:' + query;
+            req.path = '/image/labels/_search?q=Name:' + query;
             req.region = '${AWS::Region}';
             req.headers['presigned-expires'] = false;
             req.headers['Host'] = endpoint.host;
