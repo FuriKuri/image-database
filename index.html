@@ -8,12 +8,36 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
   </head>
     <script>
+      var getUrlParameter = function getUrlParameter(sParam) {
+        var sPageURL = decodeURIComponent(window.location.search.substring(1)), sURLVariables = sPageURL.split('&'), sParameterName, i;
+
+        for (i = 0; i < sURLVariables.length; i++) {
+          sParameterName = sURLVariables[i].split('=');
+
+          if (sParameterName[0] === sParam) {
+            return sParameterName[1] === undefined ? true : sParameterName[1];
+          }
+        }
+      };
+
       $(function() {
         var config = {};
-        $( "#urlSaveButton" ).click(function() {
-          config.apiGatewayUrl = $( "#apiGatewayInput" ).val();
-          config.s3BucketUrl = $( "#bucketInput" ).val();
-        });
+
+        function saveConfig() {
+          config.apiGatewayUrl = 'https://' + $( "#apiGatewayInput" ).val() + '.execute-api.eu-west-1.amazonaws.com/api';
+          config.s3BucketUrl = 'https://s3-eu-west-1.amazonaws.com/' + $( "#bucketInput" ).val();
+          $( "#config" ).hide();
+        }
+
+        $( "#urlSaveButton" ).click(saveConfig);
+
+        var gatewayParam = getUrlParameter('gateway');
+        var bucketParam = getUrlParameter('bucket');
+        $( "#apiGatewayInput" ).val(gatewayParam);
+        $( "#bucketInput" ).val(bucketParam);
+        if (gatewayParam && bucketParam) {
+          saveConfig();
+        }
 
         $( "#searchButton" ).click(function() {
           var query = $( "#searchInput" ).val();
@@ -38,7 +62,7 @@
   <body><a href="https://github.com/FuriKuri/image-database"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
     <div class="container">
       <h1>Images</h1>
-      <div class="row">
+      <div class="row" id="config">
         <form class="form-inline">
           <label class="sr-only" for="apiGatewayInput">API Gateway URL</label>
           <input type="text" class="form-control mb-2 mr-sm-2 mb-sm-0" id="apiGatewayInput" placeholder="API Gateway URL">
