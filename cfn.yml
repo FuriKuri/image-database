@@ -204,8 +204,8 @@ Resources:
   RestApi:
     Type: 'AWS::ApiGateway::RestApi'
     Properties:
-      Description: 'Vote API'
-      Name: 'Vote API'
+      Description: 'Image API'
+      Name: 'Image API'
   ImageSearchResource:
     Type: 'AWS::ApiGateway::Resource'
     Properties:
