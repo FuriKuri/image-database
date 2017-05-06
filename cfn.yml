@@ -197,7 +197,6 @@ Resources:
           exports.handler = function (event, context) {
             console.log(event);
             console.log(context);
-            console.log(event.queryStringParameters.q);
             searchImage(event.queryStringParameters.q, context);
           }
       Runtime: nodejs4.3
