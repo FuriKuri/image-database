@@ -249,3 +249,6 @@ Outputs:
   BucketName:
     Description: S3 Bucket Name
     Value: !Ref ImageBucket
+  PageUrl:
+    Description: URL for the image search
+    Value: !Join [ "", ['https://furikuri.github.io/image-database/?gateway=', !Ref RestApi, '&bucket=', !Ref 'ImageBucket']]
