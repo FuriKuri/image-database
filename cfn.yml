@@ -242,3 +242,10 @@ Resources:
       StageName: 'api'
       Variables:
         Stack: 'api'
+Outputs:
+  GatewayId:
+    Description: API Gateway ID
+    Value: !Ref RestApi
+  BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref ImageBucket
