@@ -4,7 +4,6 @@
 ```
 $ ./stack.sh
 
-An error occurred (ValidationError) when calling the DescribeStacks operation: Stack with id image-database does not exist
 {
     "StackId": "arn:aws:cloudformation:eu-west-1:073545597646:stack/image-database/208ea280-340c-11e7-ac2b-50a68645b2d2"
 }
