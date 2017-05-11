@@ -16,4 +16,5 @@ After the stack is deployed, you can access your images over the URL from the co
 ## Todo
 - [ ] AWS Lambda function for thumbnails
 - [ ] Use Confidence as score
-- [ ] Remove hard coded region 
+- [ ] Remove hard coded region
+- [ ] Include the index.html in the stack 
